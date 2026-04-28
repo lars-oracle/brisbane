@@ -1,0 +1,437 @@
+/*
+ * Copyright (c) 2026 Oracle and/or its affiliates.
+ *
+ * The Universal Permissive License (UPL), Version 1.0
+ *
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or data
+ * (collectively the "Software"), free of charge and under any and all copyright
+ * rights in the Software, and any and all patent rights owned or freely
+ * licensable by each licensor hereunder covering either (i) the unmodified
+ * Software as contributed to or provided by such licensor, or (ii) the Larger
+ * Works (as defined below), to deal in both
+ *
+ * (a) the Software, and
+ *
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software (each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at
+ * a minimum a reference to the UPL must be included in all copies or
+ * substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+apply from: 'jacoco.gradle'
+
+import java.nio.file.Files
+import java.nio.file.Paths
+
+project.ext.TEST_JAVA_VER = (project.findProperty('TEST_JAVA_VER')?.toInteger()) ?: project.ext.javaLanguageVersion
+
+project.ext.PLATFORM = determinePlatform()
+
+project.ext.STANDARD_JIPHER_NATIVE_DEPENDENCY_LOCATION = project.ext.PLATFORM.containsIgnoreCase('windows') ?
+        Paths.get('C:', 'Program Files', 'jipher') : Paths.get('/opt', 'jipher')
+project.ext.PREBUILT_JIPHER_NATIVE_DEPENDENCY_LOCATION =
+        Paths.get("${projectDir}", 'prebuilt', "${PLATFORM}")
+
+project.ext.STANDARD_JIPHER_OPENSSL_LOCATION = project.ext.STANDARD_JIPHER_NATIVE_DEPENDENCY_LOCATION.resolve('openssl')
+project.ext.PREBUILT_JIPHER_OPENSSL_LOCATION = project.ext.PREBUILT_JIPHER_NATIVE_DEPENDENCY_LOCATION.resolve('openssl')
+
+// Register the 'jipherTestJar' task so that it can be referenced in the sourceSets definitions.
+// The 'jipherTestJar' task will be configured after the sourceSets have been defined.
+tasks.register('jipherTestJar', Jar) {
+}
+
+sourceSets {
+    jipherTest {
+        // The jipherTest ProviderUtil creates a JipherJCE object
+        compileClasspath += sourceSets.main.output
+    }
+    test {
+        // tests depend on helpers, utilities and testdata defined in the jipherTest source set.
+        compileClasspath += sourceSets.jipherTest.output
+        runtimeClasspath += sourceSets.jipherTest.runtimeClasspath
+    }
+    intTest {
+        java {
+            srcDirs = ['src/intTest/java']
+            include 'com/oracle/test/integration/**'
+        }
+        resources.srcDir file('src/intTest/resources')
+
+        // Integration tests depend on helpers, utilities and testdata defined in the jipherTest source set.
+        compileClasspath += sourceSets.jipherTest.output
+        runtimeClasspath += sourceSets.jipherTest.runtimeClasspath
+
+        // Include the jipherTest JAR (which includes classes and resources) on the module path
+        // instead of the build/classes/java/jipherTest folder that only includes classes
+        runtimeClasspath -= sourceSets.jipherTest.output
+        runtimeClasspath += jipherTestJar.outputs.files
+
+        // Integration tests depend on the signed jipher-jce JAR instead of the jipher-jce build folder classes
+        compileClasspath += jar.outputs.files
+        runtimeClasspath += jar.outputs.files
+        runtimeClasspath -= sourceSets.main.runtimeClasspath
+    }
+    leakTest {
+        java.srcDir file('src/leakTest/java')
+
+        // Leak tests use an object leak monitor which accesses Jipher's OpenSSL interface
+        compileClasspath += sourceSets.main.output
+
+        // Leak tests depend on utilities defined in the jipherTest source set.
+        compileClasspath += sourceSets.jipherTest.output
+
+        // Leak Tests run the integration tests
+        compileClasspath += sourceSets.intTest.output
+        runtimeClasspath += sourceSets.intTest.runtimeClasspath
+        runtimeClasspath -= sourceSets.main.runtimeClasspath
+    }
+}
+
+// Configure the 'jipherTestJar' task
+tasks.named('jipherTestJar') {
+    group = "build"
+    description = "Assembles a jar archive containing classes that provide support for testing the library"
+
+    archiveClassifier = 'jipher-test'
+    from sourceSets.jipherTest.output
+}
+
+tasks.named('processJipherTestResources') {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+configurations {
+    jipherTestImplementation
+
+    intTestImplementation
+    intTestRuntimeOnly
+
+    leakTestImplementation.extendsFrom intTestImplementation
+}
+
+dependencies {
+    jipherTestImplementation 'com.google.code.gson:gson:2.13.2'                 // testdata uses gson
+    jipherTestImplementation 'org.junit.vintage:junit-vintage-engine:5.14.3'    // Required to compile and run JUnit 4 Tests
+
+    testImplementation 'org.junit.vintage:junit-vintage-engine:5.14.3'          // Required to compile and run JUnit 4 Tests
+    testImplementation 'org.mockito:mockito-core:5.23.0'                        // Mocking depends on byte-buddy (see below)
+    testImplementation 'net.bytebuddy:byte-buddy:1.18.7'                        // ASM 9.9, which offers support for Java 26, was first included in 1.17.8
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.14.3'         // Required to run JUnit 4 Tests
+
+    intTestImplementation 'org.junit.jupiter:junit-jupiter-api:5.14.3'          // Required to compile JUnit 5 Tests
+    intTestImplementation 'org.junit.vintage:junit-vintage-engine:5.14.3'       // Required to compile and run JUnit 4 Tests
+    intTestImplementation 'org.junit.jupiter:junit-jupiter-params:5.14.3'       // Required to compile and run JUnit 5 Parameterized Tests
+    intTestRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.14.3'          // Required to run JUnit 5 Tests
+    intTestRuntimeOnly 'org.junit.platform:junit-platform-suite-engine:1.14.3'  // Required to run JUnit 5 platform suites
+
+    leakTestImplementation 'org.junit.platform:junit-platform-suite-api:1.14.3' // Required to compile JUnit 5 platform suites
+}
+
+idea {
+    module {
+        testSources.from(project.sourceSets.intTest.java.srcDirs)
+    }
+}
+
+tasks.register('runMainClass', JavaExec) {
+    description = "Runs Jipher's main class. This can be used to verify that Jipher can locate OpenSSL runtime dependencies"
+    group = 'verification'
+
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(project.ext.TEST_JAVA_VER)
+    }
+
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.oracle.jipher.provider.JipherJCE'
+
+    // Suppress restricted method warnings related to accessing methods considered to be unsafe.
+    // See https://docs.oracle.com/en/java/javase/25/core/restricted-methods.html
+    jvmArgs += '--enable-native-access=ALL-UNNAMED'
+
+    if (findProperty('jipher.openssl.dir') || findProperty('jipher.openssl.useOsInstance')) {
+        // Set a Java system property to locate OpenSSL if a gradle property of the same name is set
+        if (findProperty('jipher.openssl.dir')) {
+            systemProperty 'jipher.openssl.dir', findProperty('jipher.openssl.dir')
+        }
+        if (findProperty('jipher.openssl.useOsInstance')) {
+            systemProperty 'jipher.openssl.useOsInstance', findProperty('jipher.openssl.useOsInstance')
+        }
+    } else {
+        // If OpenSSL is not present in the standard jipher platform-specific location
+        if (!Files.exists(project.ext.STANDARD_JIPHER_OPENSSL_LOCATION)) {
+            // Attempt to set a java system property to locate OpenSSL in the prebuild folder
+            if (Files.exists(project.ext.PREBUILT_JIPHER_OPENSSL_LOCATION)) {
+                systemProperty 'jipher.openssl.dir', project.ext.PREBUILT_JIPHER_OPENSSL_LOCATION.toString()
+            }
+        }
+    }
+
+    // Capture stderr
+    errorOutput = new ByteArrayOutputStream()
+
+    doLast {
+        // Fail if captured output reports that an Exception was thrown
+        if (errorOutput.toString().contains("Exception")) {
+           throw new GradleException("runMainClass failed because stderr reported that an Exception was thrown:\n" +
+                   errorOutput.toString())
+        }
+    }
+}
+
+tasks.withType(Test) { task ->
+
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(project.ext.TEST_JAVA_VER)
+    }
+
+    jvmArgs += '-Xmx1024M'
+    // From JDK 9 onward internal JDK APIs are no longer accessible by default
+    jvmArgs += '--add-exports=java.base/sun.security.internal.interfaces=ALL-UNNAMED'
+    jvmArgs += '--add-exports=java.base/sun.security.internal.spec=ALL-UNNAMED'
+    // com.oracle.test.integration.tls.TlsTest uses sun.security.provider.X509Factory
+    jvmArgs += '--add-exports=java.base/sun.security.provider=ALL-UNNAMED'
+    // Suppress restricted method warnings related to accessing methods considered to be unsafe.
+    // See https://docs.oracle.com/en/java/javase/25/core/restricted-methods.html
+    jvmArgs += '--enable-native-access=ALL-UNNAMED'
+
+    // Suppress warning "Dynamic loading of agents will be disallowed by default in a future release"
+    // associated with mockito-inline dynamically loading byte-buddy-agent
+    jvmArgs += '-XX:+EnableDynamicAgentLoading'
+
+    // This restriction is required to ensure that the SessionTicketResumptionTest does not try to use x25519 or x448
+    jvmArgs += '-Djdk.tls.namedGroups=secp256r1,secp384r1,secp521r1,ffdhe2048,ffdhe3072,ffdhe4096,ffdhe6144,ffdhe8192'
+
+    // GSON, which is used by the testdata package in jiphertest module, uses sun.misc.Unsafe to create instances
+    // of classes it deserializes without calling any constructors
+    // Configure the JVM to resolve the jdk.unsupported module.
+    // See https://stackoverflow.com/questions/61727613/unexpected-behaviour-from-gson
+    // Avoids Caused by: java.lang.UnsupportedOperationException:
+    //        Cannot allocate class com.oracle.jiphertest.testdata.KeyPairTestData.
+    //        Usage of JDK sun.misc.Unsafe is enabled, but it could not be used. Make sure your runtime is configured correctly.
+    jvmArgs += '--add-modules'
+    jvmArgs += 'jdk.unsupported'
+
+    testLogging {
+        events 'failed'
+        showStackTraces = true
+    }
+    ['java.security.debug'].each {
+        if (System.getProperty(it) != null)
+            systemProperty it, System.getProperty(it)
+    }
+    outputs.upToDateWhen {false}
+    testLogging.showStandardStreams = true
+
+    addTestListener(new TestListener() {
+        void beforeTest(TestDescriptor testDescriptor) {}
+        void afterTest(TestDescriptor testDescriptor, TestResult result) {}
+        void beforeSuite(TestDescriptor suite) {}
+        void afterSuite(TestDescriptor descriptor, TestResult result) {
+            if (!descriptor.parent) {
+                def out = "Test Results: ${result.resultType} " +
+                        "(${result.testCount} tests, " +
+                        "${result.successfulTestCount} successes, " +
+                        "${result.failedTestCount} failures, " +
+                        "${result.skippedTestCount} skipped)"
+                println('\n' + ('='* out.length()) + '\n' + out + '\n' + ('='* out.length()))
+            }
+        }
+    })
+}
+
+tasks.withType(Test) {
+    if (findProperty('jipher.openssl.dir') || findProperty('jipher.openssl.useOsInstance')) {
+        if (findProperty('jipher.openssl.dir')) {
+            systemProperty 'jipher.openssl.dir', findProperty('jipher.openssl.dir')
+        }
+        if (findProperty('jipher.openssl.useOsInstance')) {
+            systemProperty 'jipher.openssl.useOsInstance', findProperty('jipher.openssl.useOsInstance')
+        }
+    } else {
+        if (!Files.exists(project.ext.STANDARD_JIPHER_OPENSSL_LOCATION)) {
+            // Attempt to set a system property to locate OpenSSL
+            if (Files.exists(project.ext.PREBUILT_JIPHER_OPENSSL_LOCATION)) {
+                systemProperty 'jipher.openssl.dir', project.ext.PREBUILT_JIPHER_OPENSSL_LOCATION.toString()
+            } else {
+                if (group != null) {
+                    println('WARNING: No OpenSSL location specified. Tests for group \'' + group + '\' will fail without it.')
+                    println('         (Specify an OpenSSL location by setting property jipher.openssl.dir or using the OS provided OpenSSL by setting the property jipher.openssl.useOsInstance=true.)')
+                }
+            }
+        }
+    }
+}
+
+test {
+    // White box test: Classes are listed on class path and thus module unnamed.
+
+    // From JDK 9 onward internal JDK APIs are no longer accessible by default
+    // com.oracle.jipher.internal.spi.InternalTlsSpecTest invokes methods on sun.security.internal.interfaces
+    jvmArgs += '--add-exports=java.base/sun.security.internal.interfaces=ALL-UNNAMED'
+
+    // Jipher needs to access sun.security.internal.spec classes
+    jvmArgs += '--add-exports=java.base/sun.security.internal.spec=ALL-UNNAMED'
+
+    // Suppress restricted method warnings related to accessing methods considered to be unsafe
+    // See https://docs.oracle.com/en/java/javase/25/core/restricted-methods.html
+    jvmArgs += '--enable-native-access=ALL-UNNAMED'
+
+    gradle.taskGraph.whenReady {
+        if (it.hasTask(':sanity')) {
+            jacoco { enabled = true }
+        }
+        exclude '**/LifeCycleHookTest.class'
+    }
+    finalizedBy 'testReport'
+}
+
+tasks.register('lifeCycleHookTest', Test) {
+    description = 'Run the Life Cycle Hook tests with java.testing.lifecycleHooks.enable=true'
+    group = 'verification'
+    useJUnitPlatform { includeEngines 'junit-vintage' }
+    testClassesDirs = sourceSets.test.output
+    classpath = sourceSets.test.runtimeClasspath
+    gradle.taskGraph.whenReady {
+        if (it.hasTask(':sanity')) {
+            jacoco { enabled = true }
+        }
+        systemProperty 'java.testing.lifecycleHooks.enable', 'true'
+        include '**/LifeCycleHookTest.class'
+    }
+    finalizedBy 'testReport'
+}
+
+project.ext.commonIntegrationTestConfig =  {
+    // Black box test: Classes are listed on module path and thus are in named modules.
+
+    // From JDK 9 onward internal JDK APIs are no longer accessible by default
+    // com.oracle.test.integration.keygen.TlsMasterSecretKeyGenTest invokes methods on sun.security.internal.interfaces
+    jvmArgs += '--add-exports=java.base/sun.security.internal.interfaces=com.oracle.jipher,com.oracle.jiphertest.integration'
+
+    // com.oracle.jiphertest.util.TlsUtil and com.oracle.test.integration.keygen.TlsKeyMaterialKeyGen*Test use specClass
+    jvmArgs += '--add-exports=java.base/sun.security.internal.spec=com.oracle.jipher,com.oracle.jiphertest.other,com.oracle.jiphertest.integration'
+
+    // com.oracle.test.integration.tls.TlsTest uses sun.security.provider.X509Factory
+    jvmArgs += '--add-exports=java.base/sun.security.provider=com.oracle.jiphertest.integration'
+
+    // Suppress restricted method warnings related to accessing methods considered to be unsafe
+    // See https://docs.oracle.com/en/java/javase/25/core/restricted-methods.html
+    jvmArgs += '--enable-native-access=com.oracle.jipher'
+}
+
+tasks.register('integrationTest', Test) {
+    description = 'Runs integration tests.'
+    group = 'verification'
+    testClassesDirs = sourceSets.intTest.output.classesDirs
+    classpath = sourceSets.intTest.runtimeClasspath
+    configure project.ext.commonIntegrationTestConfig
+    useJUnitPlatform { includeEngines 'junit-jupiter', 'junit-vintage' }
+    mustRunAfter test
+    finalizedBy 'testReport'
+
+    exclude '**/*Suite.class'
+    if (TEST_JAVA_VER < 25) {
+        exclude '**/kdf/**'
+    }
+    gradle.taskGraph.whenReady {
+        if (it.hasTask(':sanity')) {
+            jacoco { enabled = true }
+        }
+    }
+}
+
+tasks.register('leakTest', Test) {
+    description = 'Runs object leak test suite.'
+    group = 'verification'
+    testClassesDirs = sourceSets.leakTest.output.classesDirs
+    classpath = sourceSets.leakTest.runtimeClasspath
+
+    // White box test: Classes are listed on class path and thus 'modules' are unnamed.
+
+    // From JDK 9 onward internal JDK APIs are no longer accessible by default
+    // com.oracle.test.integration.keygen.TlsMasterSecretKeyGenTest uses sun.security.internal.interfaces
+    jvmArgs += '--add-exports=java.base/sun.security.internal.interfaces=ALL-UNNAMED'
+
+    // com.oracle.jiphertest.util.TlsUtil and com.oracle.test.integration.keygen.TlsKeyMaterialKeyGen*Test use sun.security.internal.spec
+    jvmArgs += '--add-exports=java.base/sun.security.internal.spec=ALL-UNNAMED'
+
+    // com.oracle.test.integration.tls.TlsTest uses sun.security.provider.X509Factory
+    jvmArgs += '--add-exports=java.base/sun.security.provider=ALL-UNNAMED'
+
+    // Suppress restricted method warnings related to accessing methods considered to be unsafe
+    // See https://docs.oracle.com/en/java/javase/25/core/restricted-methods.html
+    jvmArgs += '--enable-native-access=ALL-UNNAMED'
+
+    finalizedBy 'testReport'
+    useJUnitPlatform { includeEngines 'junit-platform-suite', 'junit-jupiter', 'junit-vintage' }
+    // Run the OpenSSL object leak test suite with native object lifecycleHooks enabled (required).
+    systemProperty 'java.testing.lifecycleHooks.enable', 'true'
+    include '**/OpenSslObjLeakSuite.class'
+}
+
+jacocoTestReport {
+    dependsOn lifeCycleHookTest, integrationTest // jacocoTestReport consumes the output of lifeCycleHookTest & integrationTest
+}
+
+tasks.register('sanityClean') {
+    dependsOn clean
+}
+// Ensure 'sanity' task  runs 'runMainClass' task before attempting to run any tests
+test.mustRunAfter('runMainClass')
+tasks.register('sanityRun') {
+    dependsOn runMainClass, build, jacocoTestReport, jacocoTestCoverageVerification
+    mustRunAfter 'sanityClean'
+}
+tasks.register('sanity') {
+    dependsOn sanityClean, sanityRun
+    description = 'Run sanity testing which builds jar and libraries and performs unit & integration testing with coverage.'
+    group = 'verification'
+}
+
+task testReport(type: TestReport) {
+    destinationDirectory = file("$buildDir/reports/allTests")
+    project.tasks.withType(Test) {
+        testResults.from(project.files("$buildDir/test-results/${it.name}/binary"))
+    }
+    doLast {
+        println "Combined test results in: $buildDir/reports/allTests/index.html"
+    }
+}
+
+def determinePlatform() {
+    if (System.properties['os.name'].toLowerCase().contains('linux'))
+        if (System.properties['os.arch'].toLowerCase().contains('aarch64'))
+            return 'linux_aarch64'
+        else
+            return 'linux_x64'
+    if (System.properties['os.name'].toLowerCase().contains('windows'))
+        return 'windows_x64'
+    if (System.properties['os.name'].toLowerCase().contains('mac'))
+        if (System.properties['os.arch'].toLowerCase().contains('aarch64'))
+            return 'macos_aarch64'
+        else
+            return 'macos_x64'
+    return 'unsupported platform'
+}
+
+apply from: 'system-test.gradle'

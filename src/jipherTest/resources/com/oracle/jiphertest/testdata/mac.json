@@ -1,0 +1,177 @@
+[
+  {
+    "keyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "dataHex": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "macHex": "125d7342b9ac11cd91a39af48aa17b4f63f175d3",
+    "dataRepeats": 1,
+    "alg": "HmacSHA1"
+  },
+  {
+    "keyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "dataHex": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "macHex": "7fb3cb3588c6c1f6ffa9694d7d6ad2649365b0c1f65d69d1ec8333ea",
+    "dataRepeats": 1,
+    "alg": "HmacSHA224"
+  },
+  {
+    "keyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "dataHex": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "macHex": "773ea91e36800e46854db8ebd09181a72959098b3ef8c122d9635514ced565fe",
+    "dataRepeats": 1,
+    "alg": "HmacSHA256"
+  },
+  {
+    "keyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "dataHex": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "macHex": "88062608d3e6ad8a0aa2ace014c8a86f0aa635d947ac9febe83ef4e55966144b2a5ab39dc13814b94e3ab6e101a34f27",
+    "dataRepeats": 1,
+    "alg": "HmacSHA384"
+  },
+  {
+    "keyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "dataHex": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "macHex": "fa73b0089d56a284efb0f0756c890be9b1b5dbdd8ee81a3655f83e33b2279d39bf3e848279a722c806b485a47e67c807b946a337bee8942674278859e13292fb",
+    "dataRepeats": 1,
+    "alg": "HmacSHA512"
+  },
+  {
+    "keyHex": "F0",
+    "dataHex": "E2930E3DC19CA3DF05423DA877E69CAA6535A35D",
+    "macHex": "C9988AE50CA8CFD02A58984BABE032668D0894D7ECDBF6DB11E25780A5BCBE7D",
+    "dataRepeats": 1,
+    "alg": "HmacSHA256"
+  },
+  {
+    "keyHex": "4B19C01F0B7C7EF2CCAB04F97A3D9962B5C61ADF",
+    "dataHex": "",
+    "macHex": "1E434F76C4A84BDD4D5AAB5EAF1AFF4D814B4AE77202BCFA739AF483425E376C",
+    "dataRepeats": 1,
+    "alg": "HmacSHA256"
+  },
+  {
+    "keyHex": "089F1BFDF677BEF3B1F1CECF0CBDF6B1D242F468",
+    "dataHex": "D49FB635BCAF0E590F2AFB61B1D5C7BF3ADCF3A7",
+    "macHex": "AD98532AF147AE38950BA65B86EFF10490D1E9A2AEB59A4B0D1DA6D5E463E0BA",
+    "dataRepeats": 1,
+    "alg": "HmacSHA256"
+  },
+  {
+    "keyHex": "273E1270C2F400B2821ABE73CC723005AAF7EBD9C3958164719914ED58D66621",
+    "dataHex": "11223344556677889900",
+    "macHex": "671B220D9065C5262095570C5512B88C664CC9F4F29C9B3ED4E5310044530B9B",
+    "dataRepeats": 100,
+    "alg": "HmacSHA256"
+  },
+  {
+    "keyHex": "78",
+    "dataHex": "29CE8354A89EFA3F305CC40073D8649B28FE4D45",
+    "macHex": "28F246CD98E0C567F7D0C84381C0985DAC854613",
+    "dataRepeats": 1,
+    "alg": "HmacSHA1"
+  },
+  {
+    "keyHex": "22D5F926A82C4A8B5F1810EDF98B051BF6F27E0E",
+    "dataHex": "",
+    "macHex": "AED67C1AA9FA9499A3CF3164B901B496270FF776",
+    "dataRepeats": 1,
+    "alg": "HmacSHA1"
+  },
+  {
+    "keyHex": "1919EA4DF1430D5ECDA68032D2492C476EC8C014",
+    "dataHex": "AA449D1B43F1E2FFCD7E9704FF0D6CF2C29F300D",
+    "macHex": "4E58892DFA74C9B321D7772499857133A057CF34",
+    "dataRepeats": 1,
+    "alg": "HmacSHA1"
+  },
+  {
+    "keyHex": "876A88D040775FE96C33E3C0B33FC4F4A33623ED8720CF0A4E14F97A1052D4C8",
+    "dataHex": "11223344556677889900",
+    "macHex": "035CC33A72C5B6A1AD8330714C86BF6E10A0F878",
+    "dataRepeats": 100,
+    "alg": "HmacSHA1"
+  },
+  {
+    "keyHex": "B3",
+    "dataHex": "27CCEDD84F8E008C5BC760C06C5AF74D2C0F85F4",
+    "macHex": "493E71B1891A65DB159899D1DBE9A8C42FBAA75C3A988385599C9EF6125C9C4879B9B41C126711E53D123EAD6D02767B",
+    "dataRepeats": 1,
+    "alg": "HmacSHA384"
+  },
+  {
+    "keyHex": "4EFF1CD1DAFDB1D47CFC2DBF14CB947778967D7D",
+    "dataHex": "",
+    "macHex": "E3FF02BB287C9AC406709E055DD5BA01D2D3C19A86970331A3EBD00286ECD52AA41FEF8287D539DB90FCC33081AC431C",
+    "dataRepeats": 1,
+    "alg": "HmacSHA384"
+  },
+  {
+    "keyHex": "24C30D8DD0A747C935BF5C78ACB6B61DB800F06A",
+    "dataHex": "456EED6ECCCB84CC54E2B0044C0045BB3B9599C8",
+    "macHex": "68FD9439643B2EFD9C50C3253640055F0DFDFC421084683FBEC2907E78D01FECF3C30100C0E64EA1A18E0F30C7DB3E02",
+    "dataRepeats": 1,
+    "alg": "HmacSHA384"
+  },
+  {
+    "keyHex": "42AD2D7B31B0FE12EB8A664A50C07659890947FEEE1DD1473FBD22DEF41238DC",
+    "dataHex": "11223344556677889900",
+    "macHex": "6490708AC45CE6AD80DD60B242FDEF32502DBC9B5E29F6C0C7D8FC4DC400E5E47CE12ED4D296550681CC07CE486C6651",
+    "dataRepeats": 100,
+    "alg": "HmacSHA384"
+  },
+  {
+    "keyHex": "BC",
+    "dataHex": "4805BFC61003ED0F64514F04EDF64E8D0FF6F657",
+    "macHex": "943C217243E841991C672C64077D65F2560E1949117B85B811540834255E2FC73FB0DCB1AC72015DAA72D9D18811A4D8F930A67083E98AC9DBA655840C14CE9B",
+    "dataRepeats": 1,
+    "alg": "HmacSHA512"
+  },
+  {
+    "keyHex": "90FD929612BCF2F3025F9AA24A4ED96399631BCA",
+    "dataHex": "",
+    "macHex": "BA1FF8CB403D4025431EADF9D902E10019B685268CD044C5E84CE557A4A426E2AAD640E2BFB44E5E0B7581496E3B6C8C706FF574F2E0507679112C8BF3D79161",
+    "dataRepeats": 1,
+    "alg": "HmacSHA512"
+  },
+  {
+    "keyHex": "B9CA6D443AE3C1800F7B7195DE3F4BA4F84FB441",
+    "dataHex": "09B0080E33ED8AFF1A0413BAEADBA047BA47E160",
+    "macHex": "8B5CF54C0A235489EA14E0AFFFA6A5F20043ED92AA73B873F030FE12C9286A739D8AB72EB4B32D31B1DA77CCAAF7450CD984645DC31868E3F64438C531A1875A",
+    "dataRepeats": 1,
+    "alg": "HmacSHA512"
+  },
+  {
+    "keyHex": "8542A9FBF77452DC8FA62741C3DA8F0A1E75D081576783ECA9FAD22B0BCA5188",
+    "dataHex": "11223344556677889900",
+    "macHex": "4F8E4FE7F9C49BD302DEDB22C3516AF36D819C724D3DE2931D5110936E94D214354D95C2982E7BCA3B6D86F6E34061251979D531E900571A41F4B07F1FDB9ED4",
+    "dataRepeats": 100,
+    "alg": "HmacSHA512"
+  },
+  {
+    "keyHex": "6F",
+    "dataHex": "F8769AFE2F38687D69B64A2DAEB165B8ABAE228F",
+    "macHex": "F15E183E449DF1F5EF4536BA5828BD5C2341C3903972AD940C2828DC",
+    "dataRepeats": 1,
+    "alg": "HmacSHA224"
+  },
+  {
+    "keyHex": "5E5A07F42E40265ECC2626BF97915E51578B50E6",
+    "dataHex": "",
+    "macHex": "91D64F914B3EF5C79831CA407FDC063D5CB03A4E74FD4B271262B5E5",
+    "dataRepeats": 1,
+    "alg": "HmacSHA224"
+  },
+  {
+    "keyHex": "731E907146A613E9299269E828032F711F3611D4",
+    "dataHex": "12C3E66EDFEA713B8C0E52D455273C825B12A635",
+    "macHex": "3C6CCA440D79CFDFD55F859B878AAFEE9FE1EE96CB7B4D12B91DCD93",
+    "dataRepeats": 1,
+    "alg": "HmacSHA224"
+  },
+  {
+    "keyHex": "4013C747C08AAC29ADBC173D71BA1393BE251FB19D0265A4DE023668E14F2B51",
+    "dataHex": "11223344556677889900",
+    "macHex": "DC31AE647E067D861A02CA557EBC62E2BA88B5296D490A96B5FD7604",
+    "dataRepeats": 100,
+    "alg": "HmacSHA224"
+  }
+]

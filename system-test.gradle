@@ -1,0 +1,412 @@
+/*
+ * Copyright (c) 2026 Oracle and/or its affiliates.
+ *
+ * The Universal Permissive License (UPL), Version 1.0
+ *
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or data
+ * (collectively the "Software"), free of charge and under any and all copyright
+ * rights in the Software, and any and all patent rights owned or freely
+ * licensable by each licensor hereunder covering either (i) the unmodified
+ * Software as contributed to or provided by such licensor, or (ii) the Larger
+ * Works (as defined below), to deal in both
+ *
+ * (a) the Software, and
+ *
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software (each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at
+ * a minimum a reference to the UPL must be included in all copies or
+ * substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+import java.nio.file.Files
+import java.nio.file.Paths
+
+sourceSets {
+    systemTest {
+        // System tests depend on helpers, utilities and testdata defined in the jipherTest source set.
+        compileClasspath += sourceSets.jipherTest.output
+        runtimeClasspath += sourceSets.jipherTest.runtimeClasspath
+
+        // Include the jipherTest JAR (which includes classes and resources) on the module path
+        // instead of the build/classes/java/jipherTest folder that only includes classes
+        runtimeClasspath -= sourceSets.jipherTest.output
+        runtimeClasspath += jipherTestJar.outputs.files
+
+        // System tests depend on the signed jipher-jce JAR instead of the jipher-jce build folder classes
+        compileClasspath += jar.outputs.files
+        runtimeClasspath += jar.outputs.files
+        runtimeClasspath -= sourceSets.main.runtimeClasspath
+    }
+}
+
+configurations {
+    systemTestImplementation
+    systemTestJdk25Implementation.extendsFrom systemTestImplementation
+    systemTestRuntimeOnly
+}
+
+dependencies {
+    systemTestImplementation 'org.junit.vintage:junit-vintage-engine:5.14.3'       // Required to compile and run JUnit 4 Tests
+    systemTestImplementation 'org.junit.jupiter:junit-jupiter-api:5.14.3'          // Required to compile JUnit 5 Tests
+    systemTestRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.14.3'          // Required to run JUnit 5 Tests
+    systemTestRuntimeOnly 'org.junit.platform:junit-platform-suite-engine:1.14.3'  // Required to run JUnit 5 Tests
+}
+
+idea {
+    module {
+        testSources.from(project.sourceSets.systemTest.java.srcDirs)
+    }
+}
+
+
+tasks.withType(Test).configureEach {
+    jacoco { enabled = false }
+}
+
+tasks.register('apiTest', Test) {
+    description = 'Run API (integration) tests'
+    group = 'deploy-test'
+    useJUnitPlatform { includeEngines 'junit-jupiter', 'junit-vintage' }
+    testClassesDirs = sourceSets.intTest.output
+    classpath = sourceSets.intTest.runtimeClasspath
+    configure project.ext.commonIntegrationTestConfig
+    exclude '**/*Suite.class'
+    finalizedBy 'testReport'
+}
+
+tasks.register('apiAeadCipherTest_(stream)', Test) {
+    description = 'Run API (integration) AeadCipher and AeadCipherStream tests with jipher.cipher.AEAD.stream=true'
+    group = 'deploy-test'
+    useJUnitPlatform { includeEngines 'junit-jupiter', 'junit-vintage' }
+    testClassesDirs = sourceSets.intTest.output
+    classpath = sourceSets.intTest.runtimeClasspath
+    configure project.ext.commonIntegrationTestConfig
+    systemProperty 'jipher.cipher.AEAD.stream', 'true'
+    include 'com/oracle/test/integration/symciph/SymCipherTest$AeadCipherTest*'
+    include 'com/oracle/test/integration/symciph/AeadCipherStreamTest*'
+    finalizedBy 'testReport'
+}
+
+def libConfigs = [:]
+def classLoaderConfigs = [:]
+
+if (Files.exists(project.ext.STANDARD_JIPHER_OPENSSL_LOCATION)) {
+    libConfigs.put('default', [])
+}
+
+if (Files.exists(project.ext.PREBUILT_JIPHER_OPENSSL_LOCATION)) {
+    libConfigs.put('jipher_openssl_dir', ['jipher.openssl.dir' : project.ext.PREBUILT_JIPHER_OPENSSL_LOCATION.toString() ])
+}
+
+if (Files.exists(Paths.get('/usr/lib64/ossl-modules/fips.so'))) {
+    libConfigs.put('jipher_openssl_useOsInstance', ['jipher.openssl.useOsInstance' : 'true' ])
+}
+
+if (Files.exists(project.ext.STANDARD_JIPHER_OPENSSL_LOCATION)) {
+    classLoaderConfigs.put(
+            'default-default', ['1stPropertyList': '',
+                                '2ndPropertyList': ''])
+}
+if (Files.exists(project.ext.PREBUILT_JIPHER_OPENSSL_LOCATION)) {
+    classLoaderConfigs.put(
+            'property-property', ['1stPropertyList': "jipher.openssl.dir=${project.ext.PREBUILT_JIPHER_OPENSSL_LOCATION.toString()}",
+                                    '2ndPropertyList': "jipher.openssl.dir=${project.ext.PREBUILT_JIPHER_OPENSSL_LOCATION.toString()}"])
+}
+
+if (Files.exists(project.ext.STANDARD_JIPHER_OPENSSL_LOCATION) && Files.exists(project.ext.PREBUILT_JIPHER_OPENSSL_LOCATION)) {
+    classLoaderConfigs.put(
+            'default-property', ['1stPropertyList': '',
+                                    '2ndPropertyList': "jipher.openssl.dir=${project.ext.PREBUILT_JIPHER_OPENSSL_LOCATION.toString()}"])
+}
+
+
+def fipsEnforcementPolicies = ['NONE', 'FIPS', 'FIPS_STRICT']
+fipsEnforcementPolicies.each { policy ->
+    tasks.register("fipsTest_(${policy})", Test) {
+        description = "Run FIPS test for fips enforcment policy ${policy}"
+        group = 'deploy-test'
+        testClassesDirs = sourceSets.systemTest.output
+        classpath = sourceSets.systemTest.runtimeClasspath
+
+        // From JDK 9 onward internal JDK APIs are no longer accessible by default
+        jvmArgs += '--add-exports=java.base/sun.security.internal.spec=com.oracle.jipher,com.oracle.jiphertest.other'
+
+        // Suppress restricted method warnings related to accessing methods considered to be unsafe
+        // See https://docs.oracle.com/en/java/javase/25/core/restricted-methods.html
+        jvmArgs += '--enable-native-access=com.oracle.jipher'
+
+        // The com.oracle.systest.fips.FipsKeyGenTest class uses the sun.security.internal.spec classes
+        jvmArgs += '--add-exports=java.base/sun.security.internal.spec=com.oracle.jipher,com.oracle.jiphertest.other'
+
+        systemProperty 'provider.test.mode', 'FIRST'
+        systemProperty 'java.security.properties', "$projectDir/config/java.security/Pos1.java.security"
+        systemProperty 'jipher.fips.enforcement', policy
+        include 'com/oracle/systest/fips/Fips*'
+
+        finalizedBy 'testReport'
+    }
+}
+
+tasks.register('fipsTest') {
+    description = 'Run FIPS tests for all fips enforcment policies '
+    group = 'deploy-test'
+    fipsEnforcementPolicies.each { policy ->
+        dependsOn "fipsTest_(${policy})"
+    }
+}
+
+def provConfigs = [
+        'NoReg-INSTANCE',
+        'NoReg-DYNAMIC_FIRST',
+        'NoReg-DYNAMIC_STRING',
+        'PosN-STRING',
+        'Pos1-FIRST']
+provConfigs.each { prov_cfg ->
+    def (cfg, usage) = prov_cfg.split('-')
+    libConfigs.each { lib_cfg ->
+        def lib_cfg_name = lib_cfg.getKey()
+        def lib_cfg_props = lib_cfg.getValue()
+        tasks.register("configTest_(${prov_cfg})_${lib_cfg_name}", Test) {
+            description = "Run configuration test for provider cfg = ${prov_cfg} and library cfg ${lib_cfg_name}"
+            group = 'deploy-test'
+            testClassesDirs = sourceSets.systemTest.output
+            classpath = sourceSets.systemTest.runtimeClasspath
+
+            // Suppress restricted method warnings related to accessing methods considered to be unsafe
+            // See https://docs.oracle.com/en/java/javase/25/core/restricted-methods.html
+            jvmArgs += '--enable-native-access=com.oracle.jipher'
+
+            forkEvery = 1
+
+            lib_cfg_props.each { kv ->
+                systemProperty kv.getKey(), kv.getValue()
+            }
+            systemProperty 'java.security.properties', "$projectDir/config/java.security/${cfg}.java.security"
+            systemProperty 'provider.test.mode', usage
+
+            include 'com/oracle/systest/config/**'
+
+            // Temporary workaround for JUnit issue attempting to run abstract class as a test
+            exclude 'com/oracle/systest/config/ConfigTest.class'
+
+            finalizedBy 'testReport'
+        }
+    }
+}
+
+tasks.register('configTest') {
+    description = 'Run configuration tests for all provider and library configurations'
+    group = 'deploy-test'
+    provConfigs.each { prov_cfg ->
+        libConfigs.each { lib_config ->
+            dependsOn "configTest_(${prov_cfg})_${lib_config.getKey()}"
+        }
+    }
+}
+
+def tlsProvConfigs = [
+        ['jipherToJdkServer',    'Pos1', 'JDK'],
+        ['jipherToJipherServer', 'Pos1', 'Pos1'],
+        ['jdkToJipherServer',    'JDK',  'Pos1'],
+]
+tlsProvConfigs.each { config ->
+    def configName = config[0]
+    def clientCfg = config[1]
+    def serverCfg = config[2]
+    tasks.register("jsseTest_(${configName})", Test) {
+        description = "Run JSSE test for provider cfg ${configName}"
+        group = 'deploy-test'
+        testClassesDirs = sourceSets.systemTest.output
+        classpath = sourceSets.systemTest.runtimeClasspath
+
+        // From JDK 9 onward internal JDK APIs are no longer accessible by default
+        jvmArgs += '--add-exports=java.base/sun.security.internal.spec=com.oracle.jipher'
+        // Suppress restricted method warnings related to accessing methods considered to be unsafe
+        // See https://docs.oracle.com/en/java/javase/25/core/restricted-methods.html
+        jvmArgs += '--enable-native-access=com.oracle.jipher'
+
+        forkEvery = 1
+
+        libConfigs.each { lib_cfg ->
+            def lib_cfg_props = lib_cfg.getValue()
+            lib_cfg_props.each { kv ->
+                systemProperty kv.getKey(), kv.getValue()
+            }
+        }
+        systemProperty 'java.security.properties', "$projectDir/config/java.security/${clientCfg}.java.security"
+        systemProperty 'security.config.client', clientCfg
+        systemProperty 'security.config.server', serverCfg
+
+        include 'com/oracle/systest/tls/**'
+
+        finalizedBy 'testReport'
+    }
+}
+
+tasks.register('jsseTest') {
+    description = 'Run JSSE tests for all TLS provider and library configurations'
+    group = 'deploy-test'
+    tlsProvConfigs.each { prov_cfg ->
+        dependsOn "jsseTest_(${prov_cfg[0]})"
+    }
+}
+
+classLoaderConfigs.each { name_props ->
+    def cfg_name = name_props.getKey()
+    def props = name_props.getValue()
+    tasks.register("classloaderTest_${cfg_name}", Test) {
+        description = 'Run classloader test'
+        group = 'deploy-test'
+        testClassesDirs = sourceSets.systemTest.output
+        classpath = sourceSets.systemTest.runtimeClasspath - jar.outputs.files
+
+        // Suppress restricted method warnings related to accessing methods considered to be unsafe
+        // See https://docs.oracle.com/en/java/javase/25/core/restricted-methods.html
+        // Jipher is not listed on the module path. It is loaded at runtime by a class loader as an unnamed 'module'
+        jvmArgs += '--enable-native-access=ALL-UNNAMED'
+
+        forkEvery = 1
+
+        systemProperty 'provider.jar.path', jar.outputs.files.singleFile
+        props.each { kv ->
+            systemProperty kv.getKey(), kv.getValue()
+        }
+
+        include 'com/oracle/systest/classloader/**'
+
+        // Temporary workaround for JUnit issue attempting to run abstract class as a test
+        exclude 'com/oracle/systest/classloader/ClassloaderTest.class'
+
+        finalizedBy 'testReport'
+    }
+}
+
+tasks.register('classloaderTest') {
+    description = 'Run classloader tests for all library configurations'
+    group = 'deploy-test'
+    classLoaderConfigs.each { config ->
+        dependsOn "classloaderTest_${config.getKey()}"
+    }
+}
+
+tasks.register('serviceloaderTest', Test) {
+    description = 'Run service loader tests'
+    group = 'deploy-test'
+    useJUnitPlatform { includeEngines 'junit-jupiter' }
+    testClassesDirs = sourceSets.systemTest.output
+    classpath = sourceSets.systemTest.runtimeClasspath
+
+    // Suppress restricted method warnings related to accessing methods considered to be unsafe
+    // See https://docs.oracle.com/en/java/javase/25/core/restricted-methods.html
+    jvmArgs += '--enable-native-access=com.oracle.jipher'
+
+    include 'com/oracle/systest/serviceloader/**'
+
+    finalizedBy 'testReport'
+}
+
+def EMPTY_VERSION_RANGE = '(1.2.3, 1.2.3)'
+def OPENSSL_DEPENDENCIES = ['CryptoLibrary', 'FipsProvider']
+OPENSSL_DEPENDENCIES.each { dependency ->
+    tasks.register("unsanctioned${dependency}VersionTest", Test) {
+        description = "Run unsanctioned ${dependency} version test"
+        group = 'deploy-test'
+        useJUnitPlatform { includeEngines 'junit-jupiter' }
+        testClassesDirs = sourceSets.systemTest.output
+        classpath = sourceSets.systemTest.runtimeClasspath
+        forkEvery = 1
+
+        // Suppress restricted method warnings related to accessing methods considered to be unsafe
+        // See https://docs.oracle.com/en/java/javase/25/core/restricted-methods.html
+        jvmArgs += '--enable-native-access=com.oracle.jipher'
+
+        def propertyDependencyName = dependency[0].toLowerCase() + dependency.substring(1)
+        systemProperty "jipher.openssl.sanctioned.${propertyDependencyName}Versions", EMPTY_VERSION_RANGE
+        systemProperty "jipher.openssl.sanctioned.osProvided.${propertyDependencyName}Versions", EMPTY_VERSION_RANGE
+
+        systemProperty 'debug.version.sanctioner', 'true'
+
+        include "com/oracle/systest/version/Unsanctioned${dependency}VersionTest.class"
+
+        finalizedBy 'testReport'
+    }
+}
+
+tasks.register('sanctionedVersionsTest') {
+    description = 'Run sanctioned version tests'
+    group = 'deploy-test'
+    OPENSSL_DEPENDENCIES.each { dependency ->
+        dependsOn "unsanctioned${dependency}VersionTest"
+    }
+}
+
+tasks.register('systemTest') {
+    description = 'Run system tests ( config tests and jar tests )'
+    group = 'deploy-test'
+    dependsOn 'fipsTest', 'configTest', 'jsseTest', 'classloaderTest', 'serviceloaderTest', 'sanctionedVersionsTest'
+}
+
+
+tasks.register('testReportAll', TestReport) {
+    destinationDirectory = file("$buildDir/reports/allTests")
+    group = 'deploy-test'
+    doLast {
+        println "Combined test results in:  $buildDir/reports/allTests/index.html"
+    }
+}
+// Configure the TestReport task after all Test tasks have been created
+afterEvaluate {
+    tasks.named('testReportAll', TestReport) {
+        // Collect binary test results from all Test tasks
+        testResults.from(project.tasks.withType(Test).collect { it.binaryResultsDirectory })
+    }
+}
+
+tasks.register('testAll') {
+    description = 'Run full set of tests (system, integration)'
+    group = 'deploy-test'
+    dependsOn 'apiTest'
+    dependsOn 'apiAeadCipherTest_(stream)'
+    dependsOn 'systemTest'
+    finalizedBy 'testReportAll'
+}
+
+
+//
+// This below ensures that by default, when any testing tasks from this
+// system-test.gradle are executed (ie. group 'deploy-test'), all other tasks (such as compiling tasks)
+// are disabled. This is the behavior required for running test on remote machines.
+//
+// Disabled tasks can be re-enabled by supplying -PenableBuild=true property
+gradle.startParameter.taskNames.each { start ->
+    def fnd = project.getTasksByName(start, true).findAll { tsk -> tsk.group == 'deploy-test' }
+    if (!fnd.empty && project.ext.properties.enableBuild != 'true') {
+        gradle.taskGraph.whenReady { tg ->
+            tg.getAllTasks().each {
+                if (it.group != 'deploy-test') {
+                    it.enabled = false
+                }
+            }
+        }
+    }
+}

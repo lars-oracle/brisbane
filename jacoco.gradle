@@ -1,0 +1,147 @@
+/*
+ * Copyright (c) 2026 Oracle and/or its affiliates.
+ *
+ * The Universal Permissive License (UPL), Version 1.0
+ *
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or data
+ * (collectively the "Software"), free of charge and under any and all copyright
+ * rights in the Software, and any and all patent rights owned or freely
+ * licensable by each licensor hereunder covering either (i) the unmodified
+ * Software as contributed to or provided by such licensor, or (ii) the Larger
+ * Works (as defined below), to deal in both
+ *
+ * (a) the Software, and
+ *
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software (each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at
+ * a minimum a reference to the UPL must be included in all copies or
+ * substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+apply plugin: 'jacoco'
+
+jacoco {
+    toolVersion = '0.8.14' // Officially supports Java 25 (class file major version 69)
+}
+
+jacocoTestCoverageVerification {
+    doLast {
+        println 'Jacoco coverage checks complete!'
+    }
+
+    afterEvaluate {
+        getClassDirectories().setFrom(classDirectories.files.collect {
+            fileTree(it) {
+                // Exclude classes from coverage verification that are fully or partially skipped when testing
+                // the OS provided Oracle Linux 9+ FIPS module or due to an absence of FIPS 186-4 type domain
+                // parameters. OL9+ FIPS module does not support DESEDE or DSA keys.
+                // It also does not support FIPS 186-4 type domain parameters, which impacts DH key testing.
+                exclude(
+                        'com/oracle/jipher/internal/key/JceDhPublicKey.class',
+                        'com/oracle/jipher/internal/key/JceDhPrivateKey.class',
+                        'com/oracle/jipher/internal/key/JceDsaPublicKey.class',
+                        'com/oracle/jipher/internal/spi/*DesEde*.class',
+                        'com/oracle/jipher/internal/spi/*DESede*.class',
+                        'com/oracle/jipher/internal/spi/DhKeyFactory.class',
+                        'com/oracle/jipher/internal/spi/DsaKeyFactory.class',
+                        'com/oracle/jipher/internal/openssl/Pkey.class'
+                )
+            }
+        })
+    }
+
+    mustRunAfter jacocoTestReport
+    violationRules {
+        rule {
+            element = 'PACKAGE'
+            includes = ['com.oracle.*']
+            excludes = [
+                    // Platform dependent code has distinct code coverage targets (defined below)
+                    'com.oracle.jipher.internal.platform'
+            ]
+            limit {
+                counter = 'BRANCH'
+                minimum = 0.80
+            }
+        }
+        rule {
+            element = 'PACKAGE'
+            includes = ['com.oracle.*']
+            excludes = [
+                    // Platform dependent code has distinct code coverage targets (defined below)
+                    'com.oracle.jipher.internal.platform'
+            ]
+            limit {
+                counter = 'LINE'
+                minimum = 0.80
+            }
+        }
+
+        // As the source code in the 'com.oracle.jipher.internal.platform' package is platform dependent
+        // only a fraction of the code gets run on a single platform for a given set of system property settings.
+        rule {
+            element = 'PACKAGE'
+            includes = ['com.oracle.jipher.internal.platform*']
+            limit {
+                counter = 'BRANCH'
+                minimum = 0.20
+            }
+        }
+        rule {
+            element = 'PACKAGE'
+            includes = ['com.oracle.jipher.internal.platform*']
+            limit {
+                counter = 'LINE'
+                minimum = 0.25
+            }
+        }
+    }
+}
+jacocoTestReport {
+    reports {
+        xml.required = false
+        csv.required = false
+    }
+    afterEvaluate {
+        classDirectories.setFrom(classDirectories.files.collect {
+            fileTree(dir: it, excludes: [
+                '**/com/oracle/jipher/internal/openssl/ffm/EvpRandCtx.class' // Defer requiring good testing coverage of EvpRandCtx since EvpRandCtx is not yet used by Jipher
+            ])
+        })
+    }
+    doFirst {
+        println 'Creating Jacoco Coverage Report'
+    }
+}
+
+gradle.taskGraph.whenReady { taskGraph ->
+    if (project.ext.properties.disableSignJar == 'true') {
+        signJar.enabled = false
+    }
+    jacocoTestReport {
+        executionData project.tasks['test'], project.tasks['lifeCycleHookTest'], project.tasks['integrationTest']
+    }
+    jacocoTestCoverageVerification {
+        executionData project.tasks['test'], project.tasks['lifeCycleHookTest'], project.tasks['integrationTest']
+    }
+}

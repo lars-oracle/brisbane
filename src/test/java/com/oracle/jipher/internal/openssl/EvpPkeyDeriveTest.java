@@ -1,0 +1,114 @@
+/*
+ * Copyright (c) 2026 Oracle and/or its affiliates.
+ *
+ * The Universal Permissive License (UPL), Version 1.0
+ *
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or data
+ * (collectively the "Software"), free of charge and under any and all copyright
+ * rights in the Software, and any and all patent rights owned or freely
+ * licensable by each licensor hereunder covering either (i) the unmodified
+ * Software as contributed to or provided by such licensor, or (ii) the Larger
+ * Works (as defined below), to deal in both
+ *
+ * (a) the Software, and
+ *
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software (each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at
+ * a minimum a reference to the UPL must be included in all copies or
+ * substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+package com.oracle.jipher.internal.openssl;
+
+import java.security.spec.KeySpec;
+
+import org.junit.Test;
+
+import com.oracle.jiphertest.testdata.KeyAgreeTestVector;
+import com.oracle.jiphertest.testdata.KeyPairTestData;
+import com.oracle.jiphertest.testdata.TestData;
+
+import static com.oracle.jiphertest.testdata.DataMatchers.alg;
+import static com.oracle.jiphertest.testdata.DataMatchers.keyId;
+import static org.junit.Assert.assertEquals;
+
+public class EvpPkeyDeriveTest extends EvpTest {
+
+    private EVP_PKEY peerPublicKey;
+    private EVP_PKEY_CTX deriveCtx;
+    private EVP_PKEY_CTX uninitialisedDeriveCtx;
+
+    @Override
+    public void setUp() throws Exception {
+        super.setUp();
+
+        KeyAgreeTestVector tv = TestData.getFirst(KeyAgreeTestVector.class, alg("ECDH"));
+        KeyPairTestData keyPairTestData = TestData.getFirst(KeyPairTestData.class, keyId(tv.getKeyId()));
+        KeySpec privateKeySpec = KeyUtil.getPrivateKeySpec(keyPairTestData.getAlg(), keyPairTestData.getSecParam(), keyPairTestData.getKeyParts());
+        KeySpec peerPublicKeySpec = KeyUtil.getPublicKeySpec(tv.getKeyAlg(), tv.getPeerPub());
+
+        EVP_PKEY privateKey = KeyUtil.loadPrivate(privateKeySpec, this.libCtx, this.testArena);
+        peerPublicKey = KeyUtil.loadPublic(peerPublicKeySpec, this.libCtx, this.testArena);
+
+        this.deriveCtx = libCtx.newPkeyCtx(privateKey, null, this.testArena);
+        this.deriveCtx.deriveInit();
+        this.deriveCtx.deriveSetPeer(peerPublicKey);
+
+        this.uninitialisedDeriveCtx = libCtx.newPkeyCtx(privateKey, null, this.testArena);
+    }
+
+    // Negative tests
+
+    @Test(expected = OpenSslException.class)
+    public void uninitialisedCtxGetParamsNeg() {
+        // OpenSSL does not support getting parameters on an uninitialised derive context
+        uninitialisedDeriveCtx.getParams(this.openSsl.templateParamBuffer(this.testArena, OSSL_PARAM.of("nonsense", OSSL_PARAM.Type.INTEGER)));
+    }
+
+    @Test(expected = OpenSslException.class)
+    public void uninitialisedCtxSetParamsNeg() {
+        // OpenSSL does not support setting parameters on an uninitialised derive context
+        uninitialisedDeriveCtx.setParams(this.openSsl.dataParamBuffer(this.testArena, OSSL_PARAM.of("nonsense", 3)));
+    }
+
+    @Test(expected = OpenSslException.class)
+    public void uninitialisedCtxDeriveSetPeerNeg() {
+        uninitialisedDeriveCtx.deriveSetPeer(this.peerPublicKey);
+    }
+
+    @Test(expected = OpenSslException.class)
+    public void uninitialisedCtxGenerateNeg() {
+        uninitialisedDeriveCtx.generate(this.testArena);
+    }
+
+    @Test (expected = IllegalArgumentException.class)
+    public void ctxGetReadOnlyParams() throws Exception {
+        OsslParamBuffer readOnlyParams = deriveCtx.gettableParams();
+        try {
+            deriveCtx.getParams(readOnlyParams);
+        } catch (IllegalArgumentException e) {
+            assertEquals("Read-only OsslParamBuffer supplied", e.getMessage());
+            throw e;
+        }
+    }
+}

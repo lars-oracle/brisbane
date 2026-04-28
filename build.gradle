@@ -1,0 +1,206 @@
+/*
+ * Copyright (c) 2026 Oracle and/or its affiliates.
+ *
+ * The Universal Permissive License (UPL), Version 1.0
+ *
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or data
+ * (collectively the "Software"), free of charge and under any and all copyright
+ * rights in the Software, and any and all patent rights owned or freely
+ * licensable by each licensor hereunder covering either (i) the unmodified
+ * Software as contributed to or provided by such licensor, or (ii) the Larger
+ * Works (as defined below), to deal in both
+ *
+ * (a) the Software, and
+ *
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software (each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at
+ * a minimum a reference to the UPL must be included in all copies or
+ * substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+import java.nio.file.Files
+import java.nio.file.Paths
+
+import org.apache.tools.ant.filters.ReplaceTokens
+
+plugins {
+    id 'idea'
+    id 'java-library'
+    id 'maven-publish'
+}
+
+project.ext.javaLanguageVersion = Math.max(JavaVersion.current().majorVersion.toInteger(), 25)
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(project.ext.javaLanguageVersion)
+    }
+}
+
+javadoc {
+    // Suppress "warning: no comment" message
+    options.addBooleanOption('Xdoclint:all,-missing', true)
+}
+
+group = 'brisbane.jipher'
+version = findProperty('ProjVersion') ?: '20.0'
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 25
+}
+
+compileJava {
+    options.javaModuleMainClass.set('com.oracle.jipher.provider.JipherJCE')
+
+    // Workaround for https://github.com/gradle/gradle/issues/17484
+    options.compilerArgs.addAll(['--module-version', project.version])
+}
+
+tasks.withType(JavaCompile) {
+    options.compilerArgs += ['-Xlint:unchecked', '-Xlint:deprecation', '-Werror']
+}
+
+idea {
+    module {
+        inheritOutputDirs = false
+        outputDir = file("$buildDir/classes/main/")
+    }
+}
+
+tasks.register('processSource', Sync) {
+    description = 'Helper task to replace tokens in version source files with values'
+    def ALL_VERSIONS = '[,]'
+    from sourceSets.main.java
+    filter(ReplaceTokens, tokens: [
+            VERSION                                                     : version,
+            SANCTIONED_CRYPTO_LIBRARY_VERSIONS_DEFAULT_VALUE            : ALL_VERSIONS,
+            SANCTIONED_FIPS_PROVIDER_VERSIONS_DEFAULT_VALUE             : ALL_VERSIONS,
+            SANCTIONED_OS_PROVIDED_CRYPTO_LIBRARY_VERSIONS_DEFAULT_VALUE: ALL_VERSIONS,
+            SANCTIONED_OS_PROVIDED_FIPS_PROVIDER_VERSIONS_DEFAULT_VALUE : ALL_VERSIONS
+    ])
+    into "$buildDir/src"
+}
+
+afterEvaluate {
+    compileJava {
+        // Compile source output by processSource, with tokens replaced.
+        source = processSource.outputs
+    }
+}
+
+tasks.withType(Jar).configureEach {
+    from(['LICENSE', 'THIRD_PARTY_LICENSES']) {
+        into('META-INF')
+    }
+}
+
+jar {
+    dependsOn compileJava
+    manifest {
+        attributes(manifestAttributes())
+    }
+    doLast {
+        signIt(outputs.files.singleFile)
+    }
+    archiveClassifier = ''
+}
+
+tasks.register('sourcesJar', Jar) {
+    archiveClassifier = 'sources'
+    from collect { processSource.outputs }
+}
+
+jar.finalizedBy sourcesJar
+
+def manifestAttributes() {
+    return [
+        'Implementation-Title' : 'Open Jipher JCE (FIPS OpenSSL Wrapper for Java)',
+        'Implementation-Vendor' : 'Oracle Corporation',
+        'Implementation-Version' : version,
+        'Build-Date' : buildDate(),
+        'Build-Commit' : commitId(),
+        'Build-Jdk' : "${System.properties['java.version']} (${System.properties['java.vendor']} ${System.properties['java.vm.version']})",
+        'Automatic-Module-Name' : 'com.oracle.jipher',
+        'Main-Class' : 'com.oracle.jipher.provider.JipherJCE'
+       ]
+}
+
+def signIt(jarFile) {
+
+    String storePass
+    java.nio.file.Path keyStorePath
+    String alias = 'jcekey'
+
+    if (System.getenv('KEYSTORE') != null) {
+        // Keystore passed as base-64 encoded string. Write to file from env variable
+        keyStorePath = Paths.get("$buildDir/tmp", 'signing.keystore')
+        Files.write(keyStorePath, Base64.getDecoder().decode(System.getenv('KEYSTORE')))
+        // Get store password from env variable
+        storePass = System.getenv('KEYSTORE_PASSWORD')
+    } else if (System.getenv('KEYSTORE_FILE') != null) {
+        // Keystore filename passed from env variable
+        keyStorePath = Paths.get(System.getenv('KEYSTORE_FILE'))
+        // Get store password from env variable
+        storePass = System.getenv('KEYSTORE_PASSWORD')
+    } else if (findProperty('propertyJceKsFile') && findProperty('propertyJceKsStorePass')) {
+        // Use values from gradle.properties instead
+        keyStorePath = Paths.get(propertyJceKsFile)
+        storePass = propertyJceKsStorePass
+        if (findProperty('propertyJceKsAlias')) {
+            alias = propertyJceKsAlias
+        }
+    } else {
+        logger.warn('Keystore not configured. Provider will not be signed.')
+        return
+    }
+
+    println("Signing ${jarFile} with JCE code signing certificate")
+
+    ant.signjar(
+            jar: jarFile,
+            alias: alias,
+            keystore: keyStorePath,
+            storepass: storePass,
+            preservelastmodified: 'true',
+            verbose: 'true'
+    )
+}
+
+def commitId() {
+    'git rev-parse HEAD'.execute().text.trim()
+}
+
+def buildDate( ){
+    new java.text.SimpleDateFormat("yyyyMMdd'T'HHmmss").format(new Date())
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) { publication ->
+            artifact jar
+            artifact sourcesJar
+        }
+    }
+}
+
+apply from: 'test.gradle'
