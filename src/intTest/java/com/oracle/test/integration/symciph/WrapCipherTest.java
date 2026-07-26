@@ -47,10 +47,12 @@ import java.security.Key;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.util.Arrays;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;
+import javax.crypto.ShortBufferException;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -219,6 +221,25 @@ public class WrapCipherTest {
         } catch (NoSuchAlgorithmException e) {
             // Expected.
         }
+    }
+
+    @Test
+    public void decryptDoFinalShortBufferRetry() throws Exception {
+        Cipher c = getInitCipher(Cipher.DECRYPT_MODE);
+
+        byte[] input = tv.getCiphertext();
+        byte[] expectedOutput = tv.getData();
+        byte[] output = new byte[expectedOutput.length - 1];
+
+        try {
+            c.doFinal(input, 0, input.length, output, 0);
+            fail("Failed to throw ShortBufferException");
+        } catch (ShortBufferException e) {
+            output = Arrays.copyOf(output, expectedOutput.length);
+            int outputLen = c.doFinal(input, 0, input.length, output, 0);
+            output = Arrays.copyOf(output, outputLen);
+        }
+        assertArrayEquals(expectedOutput, output);
     }
 
     @Test(expected = IllegalBlockSizeException.class)
