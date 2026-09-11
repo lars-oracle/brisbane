@@ -42,7 +42,6 @@ package com.oracle.jipher.internal.spi;
 
 import java.util.Arrays;
 import javax.crypto.BadPaddingException;
-import javax.crypto.ShortBufferException;
 
 import org.junit.Test;
 
@@ -138,40 +137,4 @@ public class WrapCipherTest {
         }
     }
 
-    @Test
-    public void kwpUnwrapShortBufferLeavesOutputUnchanged() throws Exception {
-        WrapCipher cipher = new WrapCipher.AesWrapPad();
-        CipherCtx ctx = mock(CipherCtx.class);
-
-        cipher.ctx = ctx;
-        cipher.initialized = true;
-        cipher.encrypt = false;
-
-        when(ctx.update(any(), anyInt(), anyInt(), any(), anyInt())).thenAnswer(invocation -> {
-            byte[] outBuf = invocation.getArgument(3);
-            int outOffset = invocation.getArgument(4);
-            outBuf[outOffset] = 1;
-            outBuf[outOffset + 1] = 2;
-            return 2;
-        });
-        when(ctx.doFinal(any(), anyInt())).thenReturn(0);
-
-        byte[] in = new byte[16];
-        byte[] out = new byte[1];
-        Arrays.fill(out, (byte) 0x55);
-        byte[] expectedOut = out.clone();
-
-        try {
-            cipher.engineDoFinal(in, 0, in.length, out, 0);
-            fail("Expected engineDoFinal to fail and throw ShortBufferException");
-        } catch (ShortBufferException expected) {
-            // Ensure the caller's output buffer is unchanged after ShortBufferException.
-            assertArrayEquals(expectedOut, out);
-        }
-
-        byte[] largeOut = new byte[2];
-        int outLen = cipher.engineDoFinal(in, 0, in.length, largeOut, 0);
-        assertEquals(2, outLen);
-        assertArrayEquals(new byte[]{1, 2}, largeOut);
-    }
 }

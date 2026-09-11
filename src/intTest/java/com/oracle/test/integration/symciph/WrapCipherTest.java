@@ -230,11 +230,14 @@ public class WrapCipherTest {
         byte[] input = tv.getCiphertext();
         byte[] expectedOutput = tv.getData();
         byte[] output = new byte[expectedOutput.length - 1];
+        Arrays.fill(output, (byte) 0x55);
+        byte[] shortBufferOutput = output.clone();
 
         try {
             c.doFinal(input, 0, input.length, output, 0);
             fail("Failed to throw ShortBufferException");
         } catch (ShortBufferException e) {
+            assertArrayEquals(shortBufferOutput, output);
             output = Arrays.copyOf(output, expectedOutput.length);
             int outputLen = c.doFinal(input, 0, input.length, output, 0);
             output = Arrays.copyOf(output, outputLen);
