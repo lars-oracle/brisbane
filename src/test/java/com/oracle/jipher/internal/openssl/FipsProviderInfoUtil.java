@@ -78,9 +78,10 @@ public class FipsProviderInfoUtil {
         boolean isRHDerivative = NAME.contains("Red Hat Enterprise Linux") || NAME.contains("Oracle Linux");
 
         if (isRHDerivative) {
-            // These capabilities apply to versions 3.0.7 and 1.2.0 of the FIPS provider distributed with these Linux distributions.
+            // These capabilities apply to versions 3.0.7, 1.2.0 and 1.5.2
+            // of the FIPS provider distributed with these Linux distributions.
             // This class will need to be updated to support any future version.
-            assertTrue("3.0.7".equals(patchVersion) || "1.2.0".equals(patchVersion));
+            assertTrue("3.0.7".equals(patchVersion) || "1.2.0".equals(patchVersion) || "1.5.2".equals(patchVersion));
 
             DESEDE_IS_SUPPORTED = false;
             DSA_IS_SUPPORTED = false;

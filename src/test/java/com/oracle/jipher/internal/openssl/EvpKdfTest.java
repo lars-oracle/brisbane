@@ -357,12 +357,11 @@ public class EvpKdfTest extends EvpTest {
         OSSL_PARAM dgstParam = OSSL_PARAM.of(EVP_KDF.KDF_PARAM_DIGEST, MD_ALG);
         OSSL_PARAM passParam = OSSL_PARAM.of(EVP_KDF.KDF_PARAM_PASSWORD, password);
         String fipsProviderName = FipsProviderInfoUtil.getName();
-        String fipsProviderVersion = FipsProviderInfoUtil.getVersionString();
         try {
             kdfCtx.derive(output, saltParam, iterParam, dgstParam, passParam);
-            Assert.assertFalse(fipsProviderName.contains("Linux 9"));
+            Assert.assertFalse(fipsProviderName.contains("Red Hat Enterprise Linux") || fipsProviderName.contains("Oracle Linux"));
         } catch (OpenSslException e) {
-            Assert.assertTrue(fipsProviderVersion.startsWith("3.0.7") || fipsProviderVersion.equals("1.2.0"));
+            Assert.assertTrue(fipsProviderName.contains("Red Hat Enterprise Linux") || fipsProviderName.contains("Oracle Linux"));
             Assert.assertTrue(e.getMessage().contains("invalid key length")); // (RHE/O)L error message uses 'key' not 'password'
         }
     }
